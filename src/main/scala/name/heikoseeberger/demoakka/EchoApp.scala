@@ -16,31 +16,54 @@
 
 package name.heikoseeberger.demoakka
 
-import akka.actor.{ Actor, ActorSystem, Props }
+import akka.actor.{ Actor, ActorLogging, ActorSystem, OneForOneStrategy, Props, SupervisorStrategy }
 import akka.actor.ActorDSL._
 import scala.concurrent.duration._
 import scala.util.Properties.{ lineSeparator => newLine }
 
 object EchoApp extends App {
 
-  implicit val system = ActorSystem("demo-system")
-  val echo = system.actorOf(Props(new Echo), "echo")
-
-  actor(new Act {
-    import context.dispatcher
-    context.system.scheduler.schedule(0 seconds, 2 seconds, echo, "Hello, world!")
-    become {
-      case message => println(message)
-    }
-  })
+  val system = ActorSystem("demo-system")
+  system.actorOf(Props(new Parent), "parent")
 
   readLine(s"Hit ENTER to exit ...$newLine")
   system.shutdown()
 }
 
+class Parent extends Actor {
+
+  val echo = context.actorOf(Props(new Echo), "echo")
+
+  override val supervisorStrategy: SupervisorStrategy =
+    OneForOneStrategy(loggingEnabled = false) {
+      case e if e.getMessage == "HARMLESS" => SupervisorStrategy.Resume
+      case e if e.getMessage == "SEVERE"   => SupervisorStrategy.Restart
+      case e if e.getMessage == "KILL"     => SupervisorStrategy.Stop
+    }
+
+  actor(new Act with ActorLogging {
+    echo ! "HARMLESS"
+    echo ! "Still alive after HARMLESS"
+    echo ! "SEVERE"
+    echo ! "Still alive after SEVERE"
+    echo ! "KILL"
+    echo ! "Still alive after KILL"
+    become {
+      case message =>
+        log.info(message.toString)
+    }
+  })
+
+  override def receive: Receive =
+    Actor.emptyBehavior
+}
+
 class Echo extends Actor {
 
   override def receive: Receive = {
-    case message => sender ! message
+    case "HARMLESS" => sys.error("HARMLESS")
+    case "SEVERE"   => sys.error("SEVERE")
+    case "KILL"     => sys.error("KILL")
+    case message    => sender ! message
   }
 }
