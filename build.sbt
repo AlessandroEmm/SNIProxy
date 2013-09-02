@@ -6,6 +6,11 @@ version := "0.1.0"
 
 scalaVersion := "2.10.2"
 
+resolvers ++= List(
+  "spray-releases" at "http://repo.spray.io",
+  "spray-nightlies" at "http://nightlies.spray.io"
+)
+
 libraryDependencies ++= Dependencies.demoAkka
 
 scalacOptions ++= List(
