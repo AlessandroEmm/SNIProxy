@@ -1,19 +1,8 @@
-/*
- * Copyright 2013 Heiko Seeberger
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
+//
+//
+// SNI Proxy
+//
+//
 package Ale.Test
 package io
 
@@ -62,7 +51,6 @@ class TransProxyService(endpoint: InetSocketAddress) extends Actor with ActorLog
 }
 //Client service itself
 class ClientTransProxyService(remote: InetSocketAddress, listener: ActorRef) extends Actor {
-  println("were in")
   import Tcp._
   import context.system
 
@@ -75,18 +63,18 @@ class ClientTransProxyService(remote: InetSocketAddress, listener: ActorRef) ext
       context stop self
 
     case c @ Connected(remote, local) ⇒
-      listener ! c
+      println("Tonite")
       val connection = sender
       connection ! Register(self)
       context become {
         case data: ByteString ⇒
-          connection ! Write(data); println("WE SENT 1")
-        case CommandFailed(w: Write) ⇒ println("WE SENT 2") // O/S buffer was full
+          connection ! Write(data); println("__1")
+        case CommandFailed(w: Write) ⇒ println("__2") // O/S buffer was full
         case Received(data) ⇒
-          listener ! data; println(data); println("WE SENT3 ")
+          listener ! data; println(data); println("__3 ")
         case "close" ⇒
-          connection ! Close; println("WE SENT4")
-        case _: ConnectionClosed ⇒ context stop self; println("WE SENT5")
+          connection ! Close; println("__4")
+        case _: ConnectionClosed ⇒ context stop self; println("__5")
       }
   }
 }
@@ -190,21 +178,27 @@ class TransProxyConnectionHandler(remote: InetSocketAddress, connection: ActorRe
       val hostname = parseSNI(data.toList.map(x => (x & 0xFF)))
       if (hostname == "") context.stop(self);
       val client = context.actorOf(Client.props(new InetSocketAddress(hostname, 443), connection), "tcp-proxy-client");
+
+      //client ! "init"
+      println("Before i Sent Data")
+
+      client ! data
+
+      println("After I sent")
+      // second time
+      client ! data
+
+      println("After I sent second time")
+
       context become {
-        case data: ByteString => connection ! data
-        case Tcp.Received(data) =>
-          println(data)
+        case data: ByteString   =>
+          connection ! data; println("__6")
+        case Tcp.Received(data) => client ! data
         case _: Tcp.ConnectionClosed =>
           log.debug("Stopping, Connection with {} Closed", remote)
           context.stop(self)
-        case Terminated(`connection`) =>
-          log.debug("Connection with {} Closed", remote)
-          context.stop(self)
-
       }
 
-      client ! "init"
-      client ! data
     }
 
     case _: Tcp.ConnectionClosed =>
