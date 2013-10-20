@@ -58,12 +58,12 @@ class ClientTransProxyService(remote: InetSocketAddress, listener: ActorRef) ext
 
   def receive = {
     case CommandFailed(_: Connect) ⇒
-      println("WERE FAILED")
+      println("Command failed")
       listener ! "failed"
       context stop self
 
     case c @ Connected(remote, local) ⇒
-      println("Tonite")
+      println("Connected!")
       val connection = sender
       connection ! Register(self)
       context become {
