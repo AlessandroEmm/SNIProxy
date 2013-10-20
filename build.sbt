@@ -1,6 +1,6 @@
-organization := "name.heikoseeberger"
+organization := "alessandro meyer"
 
-name := "demo-akka"
+name := "SNI Reverse Proxy"
 
 version := "0.1.0"
 
