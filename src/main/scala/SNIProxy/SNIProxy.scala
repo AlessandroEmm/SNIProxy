@@ -63,6 +63,7 @@ class ClientTransProxyService(remote: InetSocketAddress, listener: ActorRef) ext
       context stop self
 
     case c @ Connected(remote, local) ⇒
+      listener ! "ready"
       println("Connected!")
       val connection = sender
       connection ! Register(self)
@@ -71,7 +72,7 @@ class ClientTransProxyService(remote: InetSocketAddress, listener: ActorRef) ext
           connection ! Write(data); println("__1")
         case CommandFailed(w: Write) ⇒ println("__2") // O/S buffer was full
         case Received(data) ⇒
-          listener ! data; println(data); println("__3 ")
+          listener ! data; println("__3 ")
         case "close" ⇒
           connection ! Close; println("__4")
         case _: ConnectionClosed ⇒ context stop self; println("__5")
@@ -87,6 +88,7 @@ object TransProxyConnectionHandler {
 
 class TransProxyConnectionHandler(remote: InetSocketAddress, connection: ActorRef) extends Actor with ActorLogging {
 
+  import Tcp._
   // We need to know when the connection dies without sending a `Tcp.ConnectionClosed`
   context.watch(connection)
 
@@ -174,31 +176,27 @@ class TransProxyConnectionHandler(remote: InetSocketAddress, connection: ActorRe
   }
 
   def receive: Receive = {
+
     case Tcp.Received(data) => {
       val hostname = parseSNI(data.toList.map(x => (x & 0xFF)))
       if (hostname == "") context.stop(self);
-      val client = context.actorOf(Client.props(new InetSocketAddress(hostname, 443), connection), "tcp-proxy-client");
-
-      //client ! "init"
-      println("Before i Sent Data")
-
-      client ! data
-
-      println("After I sent")
-      // second time
-      client ! data
-
-      println("After I sent second time")
-
+      println(hostname + " This is the SNI")
+      val client = context.actorOf(Client.props(new InetSocketAddress(hostname, 4443), self));
       context become {
-        case data: ByteString   =>
-          connection ! data; println("__6")
-        case Tcp.Received(data) => client ! data
-        case _: Tcp.ConnectionClosed =>
-          log.debug("Stopping, Connection with {} Closed", remote)
-          context.stop(self)
+        case "ready" => {
+          client ! data
+          context become {
+            case data: ByteString =>
+              connection ! Write(data); println("__6")
+            case Tcp.Received(data) =>
+              client ! data;
+            case _: Tcp.ConnectionClosed =>
+              log.debug("Stopping, Connection with {} Closed", remote)
+              context.stop(self)
+          }
+        }
+        case _ => context.stop(self)
       }
-
     }
 
     case _: Tcp.ConnectionClosed =>
