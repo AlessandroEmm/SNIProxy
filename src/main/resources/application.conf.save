@@ -1,0 +1,15 @@
+akka {
+//  loggers          = [akka.event.slf4j.Slf4jLogger]
+  loglevel         = "DEBUG"
+  log-dead-letters = on
+  akka.log-config-on-start = on
+  stdout-loglevel = "DEBUG"
+  
+  actor {
+    debug {
+      lifecycle = on
+      unhandled = on
+	      
+    }
+  }
+}

@@ -11,15 +11,31 @@ import akka.util.ByteString
 import akka.io.{ IO, Tcp }
 import java.net.InetSocketAddress
 import scala.util.Properties.{ lineSeparator => newLine }
+import scala.io.Source
 
-object TransProxyServiceApp extends App {
-  val port = 11111
-  val system = ActorSystem("TransProxy-system")
+object TransProxyServiceApp {
+  def main(args: Array[String]) {
+    // initalize Global ActorSystem
+    val system = ActorSystem("TransProxy-system")
+    var activeListeners = false
 
-  val endpoint = new InetSocketAddress("localhost", port)
-  system.actorOf(TransProxyService.props(endpoint), "tcp-proxy-service")
-  readLine(s"Hit ENTER to exit ...$newLine")
-  system.shutdown()
+    for (port <- args) {
+      // start listening on each given socket
+      if (port forall Character.isDigit) {
+
+        if (port.toInt > 0) {
+          val endpoint = new InetSocketAddress("0.0.0.0", port.toInt)
+          system.actorOf(TransProxyService.props(endpoint), "tcp-proxy-service-" + port)
+          activeListeners = true
+
+        }
+      }
+    }
+
+    if (activeListeners) readLine(s"Hit ENTER to exit ...$newLine")
+    system.shutdown()
+
+  }
 }
 
 object TransProxyService {
@@ -50,7 +66,7 @@ class TransProxyService(endpoint: InetSocketAddress) extends Actor with ActorLog
 
 }
 //Client service itself
-class ClientTransProxyService(remote: InetSocketAddress, listener: ActorRef) extends Actor {
+class ClientTransProxyService(remote: InetSocketAddress, listener: ActorRef) extends Actor with ActorLogging {
   import Tcp._
   import context.system
 
@@ -69,13 +85,11 @@ class ClientTransProxyService(remote: InetSocketAddress, listener: ActorRef) ext
       connection ! Register(self)
       context become {
         case data: ByteString ⇒
-          connection ! Write(data); println("__1")
-        case CommandFailed(w: Write) ⇒ println("__2") // O/S buffer was full
-        case Received(data) ⇒
-          listener ! data; println("__3 ")
-        case "close" ⇒
-          connection ! Close; println("__4")
-        case _: ConnectionClosed ⇒ context stop self; println("__5")
+          connection ! Write(data); log.debug("sent data to client")
+        case CommandFailed(w: Write) ⇒ log.debug("command failed")
+        case Received(data)          ⇒ listener ! data; log.debug("data from endpoint received");
+        case "close"                 ⇒ connection ! Close; log.debug("connection to endpoint closed");
+        case _: ConnectionClosed     ⇒ context stop self; log.debug("connection closed");
       }
   }
 }
@@ -179,23 +193,26 @@ class TransProxyConnectionHandler(remote: InetSocketAddress, connection: ActorRe
 
     case Tcp.Received(data) => {
       val hostname = parseSNI(data.toList.map(x => (x & 0xFF)))
-      if (hostname == "") context.stop(self);
-      println(hostname + " This is the SNI")
-      val client = context.actorOf(Client.props(new InetSocketAddress(hostname, 4443), self));
-      context become {
-        case "ready" => {
-          client ! data
+      hostname match {
+        case "" => context.stop(self) // in case of
+        case _ => {
+
+          val client = context.actorOf(Client.props(new InetSocketAddress(hostname, 443), self));
           context become {
-            case data: ByteString =>
-              connection ! Write(data); println("__6")
-            case Tcp.Received(data) =>
-              client ! data;
-            case _: Tcp.ConnectionClosed =>
-              log.debug("Stopping, Connection with {} Closed", remote)
-              context.stop(self)
+            case "ready" => {
+              client ! data
+              context become {
+                case data: ByteString =>
+                  connection ! Write(data); log.debug("Write to client: {}", remote)
+                case Tcp.Received(data) =>
+                  client ! data; log.debug("received data from client: {} ", remote)
+                case _: Tcp.ConnectionClosed =>
+                  context.stop(self); log.debug("Stopping, Connection with {} Closed", remote)
+              }
+            }
+            case _ => context.stop(self)
           }
         }
-        case _ => context.stop(self)
       }
     }
 

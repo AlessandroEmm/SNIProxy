@@ -6,12 +6,18 @@
     </encoder>
   </appender>
 
-  <logger name="name.heikoseeberger.demoakka" level="debug" additivity="false">
+  <logger name="scala.SNIProxy" level="debug" additivity="false">
+    <appender-ref ref="console" />
+  </logger>
+
+  <logger name="io" level="debug" additivity="false">
     <appender-ref ref="console" />
   </logger>
 
   <root level="warn">
     <appender-ref ref="console"/>
   </root>
+
+
 
 </configuration>
