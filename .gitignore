@@ -4,6 +4,8 @@ boot/
 lib_managed/
 target/
 
+.tmpBin
+
 # Eclipse
 .cache
 .classpath

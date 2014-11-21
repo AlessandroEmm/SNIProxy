@@ -4,7 +4,9 @@ name := "SNI Reverse Proxy"
 
 version := "0.1.0"
 
-scalaVersion := "2.10.2"
+scalaVersion := "2.11.4"
+
+libraryDependencies += "com.github.scopt" %% "scopt" % "3.2.0"
 
 resolvers ++= List(
   "spray-releases" at "http://repo.spray.io",
@@ -21,5 +23,3 @@ scalacOptions ++= List(
   "-target:jvm-1.6",
   "-encoding", "UTF-8"
 )
-
-// initialCommands in console := "import name.heikoseeberger.demoakka._"
